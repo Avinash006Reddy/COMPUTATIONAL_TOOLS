@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NACA Oblique Shock Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        .input-group {
+            position: relative;
+        }
+        .input-unit {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            pointer-events: none;
+        }
+        /* Custom focus ring color */
+        .focus\:ring-teal-500:focus {
+            --tw-ring-color: #14b8a6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center p-4 md:p-8">
+
+    <div class="w-full max-w-5xl bg-white p-6 rounded-2xl shadow-lg">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-2">NACA Oblique Shock Calculator</h1>
+        <p class="text-center text-gray-600 mb-6">Enter any two values to calculate the third. The result will be plotted on the detailed chart below.</p>
+
+        <!-- Calculator UI -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+            <div class="input-group">
+                <label for="mach" class="block text-sm font-medium text-gray-700 mb-1">Mach Number (M)</label>
+                <input type="number" id="mach" placeholder="e.g., 2.5" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition">
+            </div>
+            <div class="input-group">
+                <label for="theta" class="block text-sm font-medium text-gray-700 mb-1">Deflection Angle (θ)</label>
+                <input type="number" id="theta" placeholder="e.g., 15" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition">
+                <span class="input-unit">deg</span>
+            </div>
+            <div class="input-group">
+                <label for="beta" class="block text-sm font-medium text-gray-700 mb-1">Shock Angle (β)</label>
+                <input type="number" id="beta" placeholder="e.g., 38" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition">
+                 <span class="input-unit">deg</span>
+            </div>
+            <button id="calculateBtn" class="w-full bg-teal-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition duration-150 ease-in-out">
+                Calculate
+            </button>
+        </div>
+
+        <!-- Results Display -->
+        <div id="results" class="text-center p-4 min-h-[60px] bg-gray-100 rounded-md flex items-center justify-center">
+             <p class="text-gray-500">Results will be displayed here.</p>
+        </div>
+    </div>
+
+    <!-- Plotly Chart -->
+    <div class="w-full max-w-5xl bg-white p-6 rounded-2xl shadow-lg mt-6">
+        <div id="plotDiv" style="width:100%; height:700px;"></div>
+    </div>
+
+    <script>
+        const gamma = 1.4;
+        const machNumbers = [
+            1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0,
+            3.2, 3.4, 3.6, 3.8, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0, 10.0, 20.0, Infinity
+        ];
+        const plotDiv = document.getElementById('plotDiv');
+
+        // --- Core Calculation Function ---
+        function getThetaFromBetaM(beta, M) {
+            if (M <= 1) return NaN;
+            const betaRad = beta * Math.PI / 180;
+            
+            if (M === Infinity) {
+                 const numerator = Math.sin(2 * betaRad);
+                 const denominator = gamma + Math.cos(2 * betaRad);
+                 if (denominator === 0) return NaN;
+                 const thetaRad = Math.atan(numerator / denominator);
+                 return thetaRad * 180 / Math.PI;
+            }
+
+            const M2 = M * M;
+            const sinBeta2 = Math.pow(Math.sin(betaRad), 2);
+            if (M2 * sinBeta2 - 1 < 0) return NaN;
+
+            const numerator = 2 * (1 / Math.tan(betaRad)) * (M2 * sinBeta2 - 1);
+            const denominator = M2 * (gamma + Math.cos(2 * betaRad)) + 2;
+            
+            const thetaRad = Math.atan(numerator / denominator);
+            return thetaRad * 180 / Math.PI;
+        }
+
+        // --- Plotting Functions ---
+        function createBaseChart() {
+            const data = [];
+            const annotations = [];
+            const sonicLimit = { x: [], y: [] };
+            
+            const colorScale = d3.interpolateTurbo;
+
+            machNumbers.forEach((M, i) => {
+                const machAngle = (M === Infinity) ? 0 : Math.asin(1 / M) * 180 / Math.PI;
+                const betaValues = [];
+                const thetaValues = [];
+                let thetaMax = 0;
+                let betaAtThetaMax = 0;
+
+                for (let beta = machAngle; beta <= 90; beta += 0.1) {
+                    const theta = getThetaFromBetaM(beta, M);
+                    if (theta >= 0 && theta < 50) {
+                        betaValues.push(beta);
+                        thetaValues.push(theta);
+                        if (theta > thetaMax) {
+                            thetaMax = theta;
+                            betaAtThetaMax = beta;
+                        }
+                    }
+                }
+                
+                if (thetaMax > 0) {
+                    sonicLimit.x.push(thetaMax);
+                    sonicLimit.y.push(betaAtThetaMax);
+                }
+
+                const color = colorScale(i / (machNumbers.length - 1));
+
+                data.push({
+                    x: thetaValues,
+                    y: betaValues,
+                    mode: 'lines',
+                    name: `M = ${M}`,
+                    line: { color: color, width: 2 },
+                    hoverinfo: 'text',
+                    text: betaValues.map((b, j) => `M=${M}<br>θ=${thetaValues[j].toFixed(2)}°<br>β=${b.toFixed(2)}°`),
+                    showlegend: false
+                });
+
+                if (betaValues.length > 10) {
+                    let annotationIndex = -1;
+                    for(let j=0; j < thetaValues.length; j++) {
+                        if (thetaValues[j] > 5) {
+                            annotationIndex = j;
+                            break;
+                        }
+                    }
+                    if(annotationIndex !== -1 && M !== 1.1 && M !== 1.2) {
+                         annotations.push({
+                            x: thetaValues[annotationIndex],
+                            y: betaValues[annotationIndex],
+                            text: `<b>${M}</b>`,
+                            showarrow: false,
+                            font: { color: d3.color(color).darker(1.5).toString(), size: 10 },
+                            xanchor: 'left',
+                            yanchor: 'middle',
+                         });
+                    }
+                }
+            });
+            
+            data.push({
+                x: sonicLimit.x,
+                y: sonicLimit.y,
+                mode: 'lines',
+                name: 'Sonic Limit (M₂=1)',
+                line: { color: '#0f172a', width: 2.5, dash: 'dot' },
+                hoverinfo: 'name'
+            });
+
+            const layout = {
+                xaxis: { 
+                    title: '<b>Deflection Angle, θ (degrees)</b>', 
+                    range: [0, 55], 
+                    gridcolor: '#e2e8f0',
+                    dtick: 4,
+                    minor: { dtick: 2 }
+                },
+                yaxis: { 
+                    title: '<b>Shock-wave Angle, β (degrees)</b>', 
+                    range: [0, 90], 
+                    gridcolor: '#e2e8f0',
+                    dtick: 10,
+                    minor: { dtick: 5 }
+                },
+                legend: { yanchor: "top", y: 0.98, xanchor: "right", x: 0.98, font: {size: 14} },
+                margin: { t: 20, b: 70, l: 80, r: 30 }, // Reduced top margin
+                annotations: annotations,
+                hovermode: 'closest',
+                showlegend: true,
+                paper_bgcolor: '#f8fafc',
+                plot_bgcolor: '#f1f5f9',
+                hoverlabel: {
+                    bgcolor: "#ffffff",
+                    font: { size: 14, color: "#1e293b" }
+                }
+            };
+
+            Plotly.newPlot(plotDiv, data, layout);
+        }
+
+        // --- Interactive Calculator Logic ---
+        document.getElementById('calculateBtn').addEventListener('click', () => {
+            const M_in = parseFloat(document.getElementById('mach').value);
+            const theta_in = parseFloat(document.getElementById('theta').value);
+            const beta_in = parseFloat(document.getElementById('beta').value);
+            const resultsDiv = document.getElementById('results');
+            
+            createBaseChart();
+
+            const numInputs = [M_in, theta_in, beta_in].filter(v => !isNaN(v)).length;
+
+            if (numInputs !== 2) {
+                resultsDiv.innerHTML = `<p class="text-red-600 font-semibold">Please provide exactly two input values.</p>`;
+                return;
+            }
+
+            if (!isNaN(M_in) && !isNaN(beta_in)) {
+                const theta_calc = getThetaFromBetaM(beta_in, M_in);
+                if (!isNaN(theta_calc) && theta_calc >= 0) {
+                    resultsDiv.innerHTML = `<p>Calculated Deflection Angle (θ): <b class="text-teal-700">${theta_calc.toFixed(2)}°</b></p>`;
+                    plotPoint(theta_calc, beta_in, `M=${M_in}, θ=${theta_calc.toFixed(2)}°, β=${beta_in}°`);
+                } else {
+                    resultsDiv.innerHTML = `<p class="text-red-600 font-semibold">No valid solution for the given M and β.</p>`;
+                }
+            }
+            else if (!isNaN(M_in) && !isNaN(theta_in)) {
+                 if (M_in <= 1) {
+                    resultsDiv.innerHTML = `<p class="text-red-600 font-semibold">Mach number must be greater than 1.</p>`;
+                    return;
+                }
+                const machAngle = (M_in === Infinity) ? 0 : Math.asin(1 / M_in) * 180 / Math.PI;
+                let solutions = [];
+                let thetaMax = 0;
+
+                for (let beta_scan = machAngle; beta_scan <= 90; beta_scan += 0.01) {
+                    const theta_calc = getThetaFromBetaM(beta_scan, M_in);
+                    if(theta_calc > thetaMax) thetaMax = theta_calc;
+                    if (Math.abs(theta_calc - theta_in) < 0.01) {
+                        if (!solutions.some(s => Math.abs(s - beta_scan) < 0.5)) {
+                           solutions.push(beta_scan);
+                        }
+                    }
+                }
+                
+                if (theta_in > thetaMax + 0.01) {
+                     resultsDiv.innerHTML = `<p class="text-red-600 font-semibold">Shock detached. θ (${theta_in.toFixed(2)}°) > θ_max (${thetaMax.toFixed(2)}°).</p>`;
+                } else if (solutions.length > 0) {
+                    const weak_beta = Math.min(...solutions);
+                    const strong_beta = Math.max(...solutions);
+                    let resultHTML = `Weak Shock (β): <b class="text-teal-700">${weak_beta.toFixed(2)}°</b>`;
+                    plotPoint(theta_in, weak_beta, `Weak Solution<br>M=${M_in}, θ=${theta_in}°, β=${weak_beta.toFixed(2)}°`);
+                    if (solutions.length > 1 && Math.abs(weak_beta - strong_beta) > 0.1) {
+                        resultHTML += ` | Strong Shock (β): <b class="text-teal-700">${strong_beta.toFixed(2)}°</b>`;
+                        plotPoint(theta_in, strong_beta, `Strong Solution<br>M=${M_in}, θ=${theta_in}°, β=${strong_beta.toFixed(2)}°`);
+                    }
+                    resultsDiv.innerHTML = `<p>${resultHTML}</p>`;
+                } else {
+                    resultsDiv.innerHTML = `<p class="text-red-600 font-semibold">No attached shock solution found.</p>`;
+                }
+            }
+            else if (!isNaN(theta_in) && !isNaN(beta_in)) {
+                let solutionM = NaN;
+                for (let M_scan = 1.01; M_scan <= 100; M_scan += 0.01) {
+                     const theta_calc = getThetaFromBetaM(beta_in, M_scan);
+                     if (Math.abs(theta_calc - theta_in) < 0.01) {
+                         solutionM = M_scan;
+                         break;
+                     }
+                }
+
+                if (!isNaN(solutionM)) {
+                    resultsDiv.innerHTML = `<p>Calculated Mach Number (M): <b class="text-teal-700">${solutionM.toFixed(2)}</b></p>`;
+                    plotPoint(theta_in, beta_in, `M=${solutionM.toFixed(2)}, θ=${theta_in}°, β=${beta_in}°`);
+                } else {
+                     resultsDiv.innerHTML = `<p class="text-red-600 font-semibold">No valid solution for the given θ and β.</p>`;
+                }
+            }
+        });
+
+        function plotPoint(theta, beta, text) {
+            const trace = {
+                x: [theta],
+                y: [beta],
+                mode: 'markers',
+                type: 'scatter',
+                name: 'Calculated Point',
+                marker: {
+                    color: '#e11d48',
+                    size: 16,
+                    symbol: 'x-thin',
+                    line: { width: 4 }
+                },
+                hoverinfo: 'text',
+                text: text,
+                showlegend: false
+            };
+            Plotly.addTraces(plotDiv, trace);
+        }
+
+        // Initial chart load
+        window.onload = createBaseChart;
+    </script>
+</body>
+</html>

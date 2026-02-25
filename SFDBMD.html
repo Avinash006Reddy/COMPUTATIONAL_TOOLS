@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFD & BMD Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .load-card {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8 relative">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Shear Force & Bending Moment Diagram Calculator</h1>
+            <p class="text-md text-gray-600 mt-2">An interactive tool for structural analysis of beams.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- CONTROLS PANEL -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-2xl font-bold mb-6 border-b pb-4 border-gray-200">Controls</h2>
+                
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">1. Beam Setup</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="beamType" class="block text-sm font-medium text-gray-600 mb-1">Beam Type</label>
+                            <select id="beamType" class="w-full p-2 border border-gray-300 bg-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="simplySupported">Simply Supported</option>
+                                <option value="cantilever">Cantilever</option>
+                                <option value="overhanging">Overhanging</option>
+                                <option value="fixed">Fixed</option>
+                                <option value="proppedCantilever">Propped Cantilever</option>
+                            </select>
+                        </div>
+                        <div class="bg-gray-50 p-2 rounded-lg">
+                             <canvas id="beamPreviewCanvas" height="60"></canvas>
+                        </div>
+                        <div>
+                            <label for="beamLength" class="block text-sm font-medium text-gray-600 mb-1">Beam Length (m)</label>
+                            <input type="number" id="beamLength" value="10" min="1" class="w-full p-2 border border-gray-300 bg-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div id="support-container" class="space-y-4"></div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">2. Add Loads</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="addPointLoad" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md transition-colors duration-300">Point Load</button>
+                        <button id="addUDL" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md transition-colors duration-300">UDL</button>
+                        <button id="addUVL" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-md transition-colors duration-300">UVL</button>
+                        <button id="addMoment" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-md transition-colors duration-300">Moment</button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">3. Applied Loads</h3>
+                    <div id="loadsContainer" class="space-y-4 max-h-96 overflow-y-auto pr-2">
+                         <p id="no-loads-msg" class="text-gray-500 text-center p-4 border-2 border-dashed border-gray-300 rounded-md">No loads added yet.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DIAGRAMS PANEL -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                <div class="flex justify-between items-center border-b pb-4 border-gray-200 mb-6">
+                     <h2 class="text-2xl font-bold">Analysis & Diagrams</h2>
+                </div>
+                
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Calculated Results</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+                        <div id="reactions-output" class="bg-gray-50 p-4 rounded-lg"></div>
+                        <div id="max-values-output" class="bg-gray-50 p-4 rounded-lg"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Beam Diagram</h3>
+                    <div class="bg-gray-50 p-2 rounded-lg">
+                        <canvas id="beamCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Shear Force Diagram (SFD)</h3>
+                    <div class="chart-container">
+                        <canvas id="sfdChart"></canvas>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Bending Moment Diagram (BMD)</h3>
+                    <div class="chart-container">
+                        <canvas id="bmdChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM ELEMENT REFERENCES ---
+        const beamTypeSelect = document.getElementById('beamType');
+        const beamLengthInput = document.getElementById('beamLength');
+        const supportContainer = document.getElementById('support-container');
+        const loadsContainer = document.getElementById('loadsContainer');
+        const noLoadsMsg = document.getElementById('no-loads-msg');
+        
+        const addPointLoadBtn = document.getElementById('addPointLoad');
+        const addUDLBtn = document.getElementById('addUDL');
+        const addUVLBtn = document.getElementById('addUVL');
+        const addMomentBtn = document.getElementById('addMoment');
+
+        const reactionsOutput = document.getElementById('reactions-output');
+        const maxValuesOutput = document.getElementById('max-values-output');
+
+        const beamCanvas = document.getElementById('beamCanvas');
+        const beamCtx = beamCanvas.getContext('2d');
+        const beamPreviewCanvas = document.getElementById('beamPreviewCanvas');
+        const beamPreviewCtx = beamPreviewCanvas.getContext('2d');
+
+        // --- CHART.JS SETUP ---
+        let sfdChart, bmdChart;
+        const chartOptions = (title, yLabel) => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: true, text: title, font: { size: 16 }, color: '#374151' },
+                legend: { labels: { color: '#374151' } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    type: 'linear', 
+                    position: 'bottom', 
+                    title: { display: true, text: 'Position (m)', color: '#374151' },
+                    min: 0,
+                    grid: { color: '#e0e0e0' },
+                    ticks: { color: '#374151' }
+                },
+                y: { 
+                    title: { display: true, text: yLabel, color: '#374151' },
+                    grid: { color: '#e0e0e0' },
+                    ticks: { color: '#374151' }
+                }
+            },
+            elements: {
+                line: { tension: 0.1, borderWidth: 3 },
+                point: { radius: 0 }
+            }
+        });
+
+        function initializeCharts() {
+            if (sfdChart) sfdChart.destroy();
+            if (bmdChart) bmdChart.destroy();
+
+            const sfdCtx = document.getElementById('sfdChart').getContext('2d');
+            sfdChart = new Chart(sfdCtx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: chartOptions('Shear Force Diagram', 'Shear Force (kN)')
+            });
+
+            const bmdCtx = document.getElementById('bmdChart').getContext('2d');
+            bmdChart = new Chart(bmdCtx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: chartOptions('Bending Moment Diagram', 'Bending Moment (kNm)')
+            });
+        }
+
+        // --- STATE MANAGEMENT ---
+        let loads = [];
+        let supports = [];
+        let loadCounter = 0;
+
+        // --- CORE CALCULATION LOGIC ---
+        function updateApplication() {
+            const beamLength = parseFloat(beamLengthInput.value);
+            if (isNaN(beamLength) || beamLength <= 0) return;
+
+            const reactions = calculateReactions(beamLength, supports, loads);
+            const resolution = 500;
+            const { sfdData, bmdData, labels } = calculateDiagrams(beamLength, loads, reactions, resolution);
+
+            const maxSF = Math.max(0, ...sfdData.map(p => Math.abs(p)));
+            const minSF = Math.min(0, ...sfdData);
+            const maxBM = Math.max(0, ...bmdData);
+            const minBM = Math.min(0, ...bmdData);
+            
+            displayResults(reactions, {maxSF, minSF, maxBM, minBM});
+            updateCharts(sfdData, bmdData, labels, beamLength);
+            drawBeam(beamLength, supports, loads);
+            
+            noLoadsMsg.style.display = loads.length === 0 ? 'block' : 'none';
+        }
+
+        function calculateReactions(L, supports, loads) {
+            const beamType = beamTypeSelect.value;
+            let R1 = { pos: supports[0]?.pos || 0, val: 0, moment: 0 };
+            let R2 = { pos: supports[1]?.pos || L, val: 0, moment: 0 };
+
+            if (beamType === 'cantilever') {
+                let totalForce = 0;
+                let totalMomentAboutSupport = 0;
+                loads.forEach(load => {
+                    if (load.type === 'point') {
+                        totalForce += load.mag;
+                        totalMomentAboutSupport += load.mag * load.pos;
+                    } else if (load.type === 'udl') {
+                        const force = load.mag * (load.end - load.start);
+                        totalForce += force;
+                        totalMomentAboutSupport += force * (load.start + (load.end - load.start) / 2);
+                    } else if (load.type === 'uvl') {
+                        const force = 0.5 * load.mag * (load.end - load.start);
+                        totalForce += force;
+                        totalMomentAboutSupport += force * (load.start + (2/3) * (load.end - load.start));
+                    } else if (load.type === 'moment') {
+                        totalMomentAboutSupport += load.mag;
+                    }
+                });
+                R1.val = totalForce;
+                R1.moment = -totalMomentAboutSupport;
+                return [R1, R2];
+            }
+
+            if (beamType === 'simplySupported' || beamType === 'overhanging') {
+                let momentAboutR1 = 0;
+                let totalForce = 0;
+                loads.forEach(load => {
+                    if (load.type !== 'moment') {
+                         if (load.type === 'point') {
+                            totalForce += load.mag;
+                            momentAboutR1 += load.mag * (load.pos - R1.pos);
+                        } else if (load.type === 'udl') {
+                            const force = load.mag * (load.end - load.start);
+                            totalForce += force;
+                            momentAboutR1 += force * (load.start + (load.end - load.start) / 2 - R1.pos);
+                        } else if (load.type === 'uvl') {
+                            const force = 0.5 * load.mag * (load.end - load.start);
+                            totalForce += force;
+                            momentAboutR1 += force * (load.start + (2/3) * (load.end - load.start) - R1.pos);
+                        }
+                    } else {
+                        momentAboutR1 += load.mag;
+                    }
+                });
+                
+                if (R2.pos - R1.pos !== 0) {
+                     R2.val = momentAboutR1 / (R2.pos - R1.pos);
+                } else { R2.val = 0; }
+
+                R1.val = totalForce - R2.val;
+                return [R1, R2];
+            }
+
+            if (beamType === 'fixed' || beamType === 'proppedCantilever') {
+                let fem1 = 0, fem2 = 0, R1_simple = 0, R2_simple = 0, totalForce = 0;
+
+                loads.forEach(load => {
+                    const w = load.mag;
+                    if (load.type !== 'moment') {
+                        let force, centroid;
+                        if (load.type === 'point') {
+                            force = w;
+                            centroid = load.pos;
+                            totalForce += force;
+                        } else if (load.type === 'udl') {
+                            force = w * (load.end - load.start);
+                            centroid = load.start + (load.end - load.start) / 2;
+                            totalForce += force;
+                        } else if (load.type === 'uvl') {
+                            force = 0.5 * w * (load.end - load.start);
+                            centroid = load.start + (2/3) * (load.end - load.start);
+                            totalForce += force;
+                        }
+                        R2_simple += force * centroid / L;
+                        R1_simple += force * (L - centroid) / L;
+                    } else {
+                        R1_simple -= w / L;
+                        R2_simple += w / L;
+                    }
+
+                    if (load.type === 'point') {
+                        const a = load.pos; const b = L - a;
+                        fem1 -= (w * a * b * b) / (L * L);
+                        fem2 += (w * b * a * a) / (L * L);
+                    } else if (load.type === 'udl' && load.start === 0 && load.end === L) {
+                        fem1 -= (w * L * L) / 12;
+                        fem2 += (w * L * L) / 12;
+                    } else if (load.type === 'moment') {
+                        const a = load.pos; const b = L - a;
+                        fem1 += (w / (L*L)) * (b * (2*a - b));
+                        fem2 += (w / (L*L)) * (a * (2*b - a));
+                    }
+                });
+
+                if (beamType === 'fixed') {
+                    R1.moment = fem1;
+                    R2.moment = fem2;
+                    R1.val = R1_simple + (fem1 - fem2) / L;
+                    R2.val = R2_simple - (fem1 + fem2) / L;
+                }
+
+                if (beamType === 'proppedCantilever') {
+                    const M1_final = fem1 - fem2 / 2;
+                    R1.moment = M1_final;
+                    R2.moment = 0;
+                    R2.val = R2_simple - M1_final / L;
+                    R1.val = totalForce - R2.val;
+                }
+                return [R1, R2];
+            }
+
+            return [R1, R2];
+        }
+
+        function calculateDiagrams(L, loads, reactions, resolution) {
+            const sfdData = [], bmdData = [], labels = [];
+            const [R1, R2] = reactions;
+
+            for (let i = 0; i <= resolution; i++) {
+                const x = (L / resolution) * i;
+                labels.push(x);
+                let shear = 0, moment = 0;
+
+                if (x >= R1.pos) shear += R1.val;
+                if (x >= R2.pos) shear += R2.val;
+                
+                moment += R1.moment;
+                if (x >= R1.pos) moment += R1.val * (x - R1.pos);
+                if (x >= R2.pos) moment += R2.val * (x - R2.pos);
+
+                loads.forEach(load => {
+                    if (load.type === 'point' && x > load.pos) {
+                        shear -= load.mag;
+                        moment -= load.mag * (x - load.pos);
+                    } else if (load.type === 'udl' && x > load.start) {
+                        const effectiveEnd = Math.min(x, load.end);
+                        const loadLength = effectiveEnd - load.start;
+                        const force = load.mag * loadLength;
+                        shear -= force;
+                        moment -= force * (loadLength / 2);
+                    } else if (load.type === 'uvl' && x > load.start) {
+                        const effectiveEnd = Math.min(x, load.end);
+                        const loadLength = effectiveEnd - load.start;
+                        const totalLoadLength = load.end - load.start;
+                        if (totalLoadLength > 0) {
+                            const heightAtX = load.mag * (loadLength / totalLoadLength);
+                            const force = 0.5 * heightAtX * loadLength;
+                            shear -= force;
+                            moment -= force * (loadLength / 3);
+                        }
+                    } else if (load.type === 'moment' && x > load.pos) {
+                        moment -= load.mag;
+                    }
+                });
+                sfdData.push(shear);
+                bmdData.push(moment);
+            }
+            return { sfdData, bmdData, labels };
+        }
+
+        // --- UI UPDATE FUNCTIONS ---
+        function displayResults(reactions, maxValues) {
+            const [R1, R2] = reactions;
+            const beamType = beamTypeSelect.value;
+            
+            let reactionHtml = `<h4 class="font-semibold text-gray-800">Support Reactions</h4>`;
+            reactionHtml += `<p class="text-lg">R @ ${R1.pos.toFixed(1)}m: <span class="font-bold text-blue-600">${R1.val.toFixed(2)} kN</span></p>`;
+            if (Math.abs(R1.moment) > 1e-9) {
+                reactionHtml += `<p class="text-lg">M @ ${R1.pos.toFixed(1)}m: <span class="font-bold text-blue-600">${R1.moment.toFixed(2)} kNm</span></p>`;
+            }
+            if (beamType !== 'cantilever') {
+                reactionHtml += `<p class="text-lg">R @ ${R2.pos.toFixed(1)}m: <span class="font-bold text-blue-600">${R2.val.toFixed(2)} kN</span></p>`;
+            }
+            if (Math.abs(R2.moment) > 1e-9) {
+                 reactionHtml += `<p class="text-lg">M @ ${R2.pos.toFixed(1)}m: <span class="font-bold text-blue-600">${R2.moment.toFixed(2)} kNm</span></p>`;
+            }
+            reactionsOutput.innerHTML = reactionHtml;
+            
+            maxValuesOutput.innerHTML = `
+                <h4 class="font-semibold text-gray-800">Maximum Values</h4>
+                <p class="text-lg">Max Shear: <span class="font-bold text-red-600">${maxValues.maxSF.toFixed(2)} kN</span></p>
+                <p class="text-lg">Max Bending Moment: <span class="font-bold text-purple-600">${maxValues.maxBM.toFixed(2)} kNm</span></p>
+            `;
+        }
+        
+        function updateCharts(sfdData, bmdData, labels, beamLength) {
+            sfdChart.data.labels = labels;
+            sfdChart.data.datasets = [{
+                label: 'Shear Force', data: sfdData, borderColor: 'rgb(239, 68, 68)',
+                backgroundColor: 'rgba(239, 68, 68, 0.5)', fill: true,
+            }];
+            sfdChart.options.scales.x.max = beamLength;
+            sfdChart.update();
+
+            bmdChart.data.labels = labels;
+            bmdChart.data.datasets = [{
+                label: 'Bending Moment', data: bmdData, borderColor: 'rgb(139, 92, 246)',
+                backgroundColor: 'rgba(139, 92, 246, 0.5)', fill: true,
+            }];
+            bmdChart.options.scales.x.max = beamLength;
+            bmdChart.update();
+        }
+
+        function drawBeam(L, supports, loads) {
+            const canvas = beamCanvas;
+            const ctx = beamCtx;
+            const h = 150;
+            const padding = 30;
+            canvas.width = canvas.clientWidth;
+            canvas.height = h;
+            if (canvas.width <= 2 * padding) return;
+            const effectiveWidth = canvas.width - 2 * padding;
+            const scale = effectiveWidth / L;
+
+            ctx.clearRect(0, 0, canvas.width, h);
+            const beamY = h * 0.5;
+            
+            ctx.fillStyle = '#60a5fa';
+            ctx.fillRect(padding, beamY - 5, effectiveWidth, 10);
+            
+            ctx.font = "12px Arial";
+            ctx.fillStyle = "#333";
+            ctx.textAlign = "center";
+            for(let i=0; i<=L; i++) {
+                if (L <= 20 || i % Math.ceil(L/10) === 0) {
+                    const markerX = padding + i * scale;
+                    ctx.fillText(i, markerX, beamY + 30);
+                    ctx.beginPath();
+                    ctx.moveTo(markerX, beamY + 5);
+                    ctx.lineTo(markerX, beamY + 15);
+                    ctx.strokeStyle = "#999";
+                    ctx.stroke();
+                }
+            }
+
+            const beamType = beamTypeSelect.value;
+            supports.forEach((support, index) => {
+                const x = padding + support.pos * scale;
+                ctx.fillStyle = '#374151';
+                if ((beamType === 'cantilever' || beamType === 'proppedCantilever' || beamType === 'fixed') && index === 0) {
+                    ctx.fillRect(x, beamY - 20, 10, 40);
+                } else if (beamType === 'fixed' && index === 1) {
+                    ctx.fillRect(x - 10, beamY - 20, 10, 40);
+                } else {
+                    ctx.beginPath();
+                    ctx.moveTo(x, beamY + 5);
+                    ctx.lineTo(x - 15, beamY + 25);
+                    ctx.lineTo(x + 15, beamY + 25);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            });
+
+            loads.forEach(load => {
+                ctx.font = "bold 14px Arial";
+                const x = padding + load.pos * scale;
+                if (load.type === 'point') {
+                    ctx.strokeStyle = '#ef4444'; ctx.fillStyle = '#ef4444'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(x, beamY - 50); ctx.lineTo(x, beamY - 10); ctx.stroke();
+                    ctx.moveTo(x, beamY - 50); ctx.lineTo(x - 5, beamY - 40); ctx.moveTo(x, beamY - 50); ctx.lineTo(x + 5, beamY - 40); ctx.stroke();
+                    ctx.fillText(`${load.mag} kN`, x, beamY - 60);
+                } else if (load.type === 'udl') {
+                    const startX = padding + load.start * scale; const width = (load.end - load.start) * scale;
+                    ctx.fillStyle = 'rgba(34, 197, 94, 0.5)';
+                    ctx.fillRect(startX, beamY - 40, width, 35);
+                    ctx.fillStyle = '#15803d'; ctx.textAlign = "center";
+                    ctx.fillText(`${load.mag} kN/m`, startX + width / 2, beamY - 50);
+                } else if (load.type === 'uvl') {
+                    const startX = padding + load.start * scale; const endX = padding + load.end * scale;
+                    ctx.fillStyle = 'rgba(168, 85, 247, 0.5)';
+                    ctx.beginPath(); ctx.moveTo(startX, beamY - 5); ctx.lineTo(startX, beamY - 45); ctx.lineTo(endX, beamY - 5); ctx.closePath(); ctx.fill();
+                    ctx.fillStyle = '#7e22ce'; ctx.textAlign = "center";
+                    ctx.fillText(`${load.mag} kN/m`, startX + (endX - startX) / 3, beamY - 55);
+                } else if (load.type === 'moment') {
+                    ctx.strokeStyle = '#f97316'; ctx.fillStyle = '#f97316'; ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    if (load.mag > 0) {
+                        ctx.arc(x, beamY - 25, 15, Math.PI * 1.2, Math.PI * 0.4);
+                        ctx.moveTo(x + 13, beamY - 15); ctx.lineTo(x + 15, beamY - 25); ctx.lineTo(x + 5, beamY - 20);
+                    } else {
+                        ctx.arc(x, beamY - 25, 15, Math.PI * 1.6, Math.PI * 0.8, true);
+                        ctx.moveTo(x - 13, beamY - 15); ctx.lineTo(x - 15, beamY - 25); ctx.lineTo(x - 5, beamY - 20);
+                    }
+                    ctx.stroke();
+                    ctx.fillText(`${Math.abs(load.mag)} kNm`, x, beamY - 50);
+                }
+            });
+        }
+        
+        function drawBeamPreview(type) {
+            const canvas = beamPreviewCanvas;
+            const ctx = beamPreviewCtx;
+            canvas.width = canvas.clientWidth;
+            const w = canvas.width;
+            const h = canvas.height;
+            if (w < 50) return;
+            const beamY = h * 0.5;
+            const startX = 15;
+            const endX = w - 15;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(startX, beamY - 4, endX - startX, 8);
+
+            const drawSupport = (x) => {
+                ctx.fillStyle = '#4b5563';
+                ctx.beginPath();
+                ctx.moveTo(x, beamY + 4);
+                ctx.lineTo(x - 10, beamY + 15);
+                ctx.lineTo(x + 10, beamY + 15);
+                ctx.closePath();
+                ctx.fill();
+            };
+            const drawFixedSupport = (x, atStart = true) => {
+                ctx.fillStyle = '#4b5563';
+                const rectX = atStart ? x : x - 8;
+                ctx.fillRect(rectX, beamY - 12, 8, 24);
+            };
+
+            switch(type) {
+                case 'simplySupported':
+                    drawSupport(startX); drawSupport(endX); break;
+                case 'cantilever':
+                    drawFixedSupport(startX); break;
+                case 'overhanging':
+                    drawSupport(startX + (endX - startX) * 0.2); drawSupport(endX - (endX - startX) * 0.2); break;
+                case 'fixed':
+                    drawFixedSupport(startX, true); drawFixedSupport(endX, false); break;
+                case 'proppedCantilever':
+                    drawFixedSupport(startX, true); drawSupport(endX); break;
+            }
+        }
+
+        function createLoadCard(id, type) {
+            const card = document.createElement('div');
+            card.id = `load-${id}`;
+            card.className = 'load-card p-4 border rounded-lg shadow-sm';
+            
+            let content = '', title = '', colorClass = '';
+            const inputClasses = "w-full p-1 border rounded bg-white border-gray-300";
+
+            switch(type) {
+                case 'point':
+                    title = 'Point Load'; colorClass = 'border-blue-300 bg-blue-50';
+                    content = `<div class="grid grid-cols-2 gap-2"><div><label class="text-xs">Magnitude (kN)</label><input type="number" data-prop="mag" value="10" class="${inputClasses}"></div><div><label class="text-xs">Position (m)</label><input type="number" data-prop="pos" value="5" class="${inputClasses}"></div></div>`;
+                    break;
+                case 'udl':
+                    title = 'Uniformly Distributed Load'; colorClass = 'border-green-300 bg-green-50';
+                    content = `<div><label class="text-xs">Magnitude (kN/m)</label><input type="number" data-prop="mag" value="5" class="${inputClasses} mb-2"></div><div class="grid grid-cols-2 gap-2"><div><label class="text-xs">Start (m)</label><input type="number" data-prop="start" value="0" class="${inputClasses}"></div><div><label class="text-xs">End (m)</label><input type="number" data-prop="end" value="10" class="${inputClasses}"></div></div>`;
+                    break;
+                case 'uvl':
+                    title = 'Uniformly Varying Load'; colorClass = 'border-purple-300 bg-purple-50';
+                    content = `<div><label class="text-xs">Peak Magnitude (kN/m)</label><input type="number" data-prop="mag" value="10" class="${inputClasses} mb-2"></div><div class="grid grid-cols-2 gap-2"><div><label class="text-xs">Start (m)</label><input type="number" data-prop="start" value="0" class="${inputClasses}"></div><div><label class="text-xs">End (m)</label><input type="number" data-prop="end" value="10" class="${inputClasses}"></div></div>`;
+                    break;
+                case 'moment':
+                    title = 'Moment'; colorClass = 'border-orange-300 bg-orange-50';
+                    content = `<div class="grid grid-cols-2 gap-2"><div><label class="text-xs">Magnitude (kNm)</label><input type="number" data-prop="mag" value="20" class="${inputClasses}"></div><div><label class="text-xs">Position (m)</label><input type="number" data-prop="pos" value="5" class="${inputClasses}"></div></div>`;
+                    break;
+            }
+            
+            card.classList.add(...colorClass.split(' '));
+            card.innerHTML = `<div class="flex justify-between items-center mb-2"><h4 class="font-semibold text-sm">${title}</h4><button data-id="${id}" class="remove-load-btn text-red-500 hover:text-red-700 font-bold">✖</button></div>${content}`;
+            loadsContainer.prepend(card);
+        }
+
+        function updateSupportInputs() {
+            const L = parseFloat(beamLengthInput.value);
+            const type = beamTypeSelect.value;
+            supportContainer.innerHTML = '';
+            drawBeamPreview(type);
+            
+            if (type === 'simplySupported' || type === 'fixed' || type === 'cantilever' || type === 'proppedCantilever') {
+                supports = [{ pos: 0 }, { pos: L }];
+            } else if (type === 'overhanging') {
+                supportContainer.innerHTML = `<div class="grid grid-cols-2 gap-2"><div><label class="text-xs">Support 1 Pos (m)</label><input type="number" id="support1Pos" value="2" class="w-full p-1 border rounded bg-white border-gray-300"></div><div><label class="text-xs">Support 2 Pos (m)</label><input type="number" id="support2Pos" value="8" class="w-full p-1 border rounded bg-white border-gray-300"></div></div>`;
+                const s1 = document.getElementById('support1Pos');
+                const s2 = document.getElementById('support2Pos');
+                supports = [{pos: parseFloat(s1.value)}, {pos: parseFloat(s2.value)}];
+                
+                s1.addEventListener('input', () => { supports[0].pos = parseFloat(s1.value); updateApplication(); });
+                s2.addEventListener('input', () => { supports[1].pos = parseFloat(s2.value); updateApplication(); });
+            }
+            updateApplication();
+        }
+
+        // --- EVENT LISTENERS ---
+        addPointLoadBtn.addEventListener('click', () => {
+            const id = ++loadCounter;
+            loads.push({ id, type: 'point', mag: 10, pos: parseFloat(beamLengthInput.value) / 2 });
+            createLoadCard(id, 'point');
+            updateApplication();
+        });
+        addUDLBtn.addEventListener('click', () => {
+            const id = ++loadCounter;
+            loads.push({ id, type: 'udl', mag: 5, start: 0, end: parseFloat(beamLengthInput.value) });
+            createLoadCard(id, 'udl');
+            updateApplication();
+        });
+        addUVLBtn.addEventListener('click', () => {
+            const id = ++loadCounter;
+            loads.push({ id, type: 'uvl', mag: 10, start: 0, end: parseFloat(beamLengthInput.value) });
+            createLoadCard(id, 'uvl');
+            updateApplication();
+        });
+        addMomentBtn.addEventListener('click', () => {
+            const id = ++loadCounter;
+            loads.push({ id, type: 'moment', mag: 20, pos: parseFloat(beamLengthInput.value) / 2 });
+            createLoadCard(id, 'moment');
+            updateApplication();
+        });
+
+        beamTypeSelect.addEventListener('change', updateSupportInputs);
+        beamLengthInput.addEventListener('input', updateSupportInputs);
+        
+        loadsContainer.addEventListener('input', (e) => {
+            if (e.target.matches('input[type="number"]')) {
+                const card = e.target.closest('.load-card');
+                const id = parseInt(card.id.split('-')[1]);
+                const prop = e.target.dataset.prop;
+                const value = parseFloat(e.target.value);
+                const load = loads.find(l => l.id === id);
+                if (load) { load[prop] = value; updateApplication(); }
+            }
+        });
+        
+        loadsContainer.addEventListener('click', (e) => {
+            if (e.target.matches('.remove-load-btn')) {
+                const id = parseInt(e.target.dataset.id);
+                loads = loads.filter(l => l.id !== id);
+                document.getElementById(`load-${id}`).remove();
+                updateApplication();
+            }
+        });
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            initializeCharts();
+            updateSupportInputs();
+        };
+        
+        window.addEventListener('resize', () => {
+            setTimeout(() => {
+                updateApplication();
+            }, 50);
+        });
+
+    </script>
+</body>
+</html>

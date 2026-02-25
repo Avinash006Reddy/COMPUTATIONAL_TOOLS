@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tsiolkovsky Rocket Equation Calculator</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            padding: 1.5rem; /* p-6 */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); /* shadow-lg */
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        input:disabled {
+            background-color: #f3f4f6; /* gray-100 */
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold">Tsiolkovsky Rocket Equation Calculator</h1>
+            <p class="text-md text-gray-600 mt-2">A multi-stage rocket performance analyzer.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <div class="flex flex-col gap-8">
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Configuration</h2>
+                    <div class="flex items-center gap-4">
+                        <label for="num-stages" class="font-medium">Number of Stages:</label>
+                        <input type="number" id="num-stages" value="1" min="1" max="10" class="w-24 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button id="generate-btn" class="bg-blue-600 text-white font-semibold px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">Generate</button>
+                    </div>
+                </div>
+
+                <div id="stage-parameters-container" class="flex flex-col gap-6">
+                    </div>
+
+                <div>
+                    <button id="calculate-btn" class="w-full bg-green-600 text-white font-bold text-lg px-6 py-3 rounded-lg hover:bg-green-700 transition-colors shadow-md">Calculate & Display Results</button>
+                </div>
+            </div>
+
+            <div class="card h-full">
+                <h2 class="text-xl font-semibold mb-4">Results Breakdown</h2>
+                <div id="results-container" class="text-gray-600 table-container">
+                    <p>Enter stage parameters and click calculate to see the detailed results.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const numStagesInput = document.getElementById('num-stages');
+            const generateBtn = document.getElementById('generate-btn');
+            const calculateBtn = document.getElementById('calculate-btn');
+            const stageParamsContainer = document.getElementById('stage-parameters-container');
+            const resultsContainer = document.getElementById('results-container');
+
+            const G0 = 9.80665; // Standard gravity in m/s^2
+
+            generateStageFields();
+
+            generateBtn.addEventListener('click', generateStageFields);
+            calculateBtn.addEventListener('click', calculateResults);
+
+            function generateStageFields() {
+                const numStages = parseInt(numStagesInput.value, 10);
+                stageParamsContainer.innerHTML = '';
+
+                if (numStages < 1 || numStages > 10) {
+                    stageParamsContainer.innerHTML = '<p class="text-red-500">Please enter a number of stages between 1 and 10.</p>';
+                    return;
+                }
+
+                for (let i = 1; i <= numStages; i++) {
+                    const stageCard = document.createElement('div');
+                    stageCard.className = 'card border border-gray-200 stage-card';
+                    stageCard.dataset.stageIndex = i;
+
+                    stageCard.innerHTML = `
+                        <h3 class="text-lg font-semibold mb-4">Stage ${i}</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="solve-for-${i}" class="block text-sm font-medium text-gray-500">Solve For</label>
+                                <select id="solve-for-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg">
+                                    <option value="deltaV" selected>Δv (Delta-V)</option>
+                                    <option value="initialMass">Initial Mass (m₀)</option>
+                                    <option value="finalMass">Final Mass (m_f)</option>
+                                    <option value="propellantMass">Propellant Mass (mₚ)</option>
+                                    <option value="isp">Isp / Vₑ</option>
+                                </select>
+                            </div>
+                             <div></div> <div>
+                                <label for="initial-mass-${i}" class="block text-sm font-medium text-gray-500">Initial Mass (m₀) [kg]</label>
+                                <input type="number" id="initial-mass-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., 300000">
+                            </div>
+                            <div>
+                                <label for="final-mass-${i}" class="block text-sm font-medium text-gray-500">Final Mass (m_f) [kg]</label>
+                                <input type="number" id="final-mass-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., 100000">
+                            </div>
+                             <div>
+                                <label for="propellant-mass-${i}" class="block text-sm font-medium text-gray-500">Propellant Mass (mₚ) [kg]</label>
+                                <input type="number" id="propellant-mass-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., 200000">
+                            </div>
+                            <div>
+                                <label for="isp-${i}" class="block text-sm font-medium text-gray-500">Specific Impulse (Isp) [s]</label>
+                                <input type="number" id="isp-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., 300">
+                            </div>
+                            <div>
+                                <label for="ve-${i}" class="block text-sm font-medium text-gray-500">Exhaust Velocity (Vₑ) [m/s]</label>
+                                <input type="number" id="ve-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., 2942">
+                            </div>
+                            <div>
+                                <label for="delta-v-${i}" class="block text-sm font-medium text-gray-500">Ideal Δv [m/s]</label>
+                                <input type="number" id="delta-v-${i}" class="mt-1 w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., 4000">
+                            </div>
+                        </div>
+                    `;
+                    stageParamsContainer.appendChild(stageCard);
+
+                    const solveForSelect = stageCard.querySelector(`#solve-for-${i}`);
+                    const initialMassInput = stageCard.querySelector(`#initial-mass-${i}`);
+                    const finalMassInput = stageCard.querySelector(`#final-mass-${i}`);
+                    const propellantMassInput = stageCard.querySelector(`#propellant-mass-${i}`);
+                    const ispInput = stageCard.querySelector(`#isp-${i}`);
+                    const veInput = stageCard.querySelector(`#ve-${i}`);
+                    const deltaVInput = stageCard.querySelector(`#delta-v-${i}`);
+
+                    const updateInputStates = () => {
+                        [initialMassInput, finalMassInput, propellantMassInput, ispInput, veInput, deltaVInput].forEach(input => input.disabled = false);
+                        const selectedValue = solveForSelect.value;
+                        if (selectedValue === 'initialMass') initialMassInput.disabled = true;
+                        else if (selectedValue === 'finalMass') finalMassInput.disabled = true;
+                        else if (selectedValue === 'propellantMass') propellantMassInput.disabled = true;
+                        else if (selectedValue === 'isp') { ispInput.disabled = true; veInput.disabled = true; }
+                        else if (selectedValue === 'deltaV') deltaVInput.disabled = true;
+                    };
+
+                    solveForSelect.addEventListener('change', updateInputStates);
+
+                    ispInput.addEventListener('input', () => {
+                        if (document.activeElement === ispInput) {
+                            const ispVal = parseFloat(ispInput.value);
+                            veInput.value = isNaN(ispVal) ? '' : (ispVal * G0).toFixed(2);
+                        }
+                    });
+                    veInput.addEventListener('input', () => {
+                        if (document.activeElement === veInput) {
+                            const veVal = parseFloat(veInput.value);
+                            ispInput.value = isNaN(veVal) ? '' : (veVal / G0).toFixed(3);
+                        }
+                    });
+                    
+                    updateInputStates();
+                }
+            }
+
+            function calculateResults() {
+                resultsContainer.innerHTML = '';
+                const stagesData = [];
+                const stageCards = document.querySelectorAll('.stage-card');
+                
+                for (let i = 1; i <= stageCards.length; i++) {
+                    const stageIndex = i;
+                    const solveFor = document.getElementById(`solve-for-${stageIndex}`).value;
+
+                    let m0_structural = parseFloat(document.getElementById(`initial-mass-${stageIndex}`).value);
+                    let mf_structural = parseFloat(document.getElementById(`final-mass-${stageIndex}`).value);
+                    let mp_structural = parseFloat(document.getElementById(`propellant-mass-${stageIndex}`).value);
+                    let isp = parseFloat(document.getElementById(`isp-${stageIndex}`).value);
+                    let ve = parseFloat(document.getElementById(`ve-${stageIndex}`).value);
+                    let deltaV = parseFloat(document.getElementById(`delta-v-${stageIndex}`).value);
+
+                    if (!isNaN(isp)) { ve = isp * G0; } 
+                    else if (!isNaN(ve)) { isp = ve / G0; }
+
+                    try {
+                        switch (solveFor) {
+                            case 'deltaV':
+                                if (isNaN(m0_structural) || isNaN(mf_structural) || isNaN(isp)) throw new Error("Initial Mass, Final Mass, and Isp/Ve are required.");
+                                if (m0_structural <= mf_structural) throw new Error("Initial Mass must be greater than Final Mass.");
+                                deltaV = isp * G0 * Math.log(m0_structural / mf_structural);
+                                break;
+                            case 'initialMass':
+                                if (isNaN(mf_structural) || isNaN(isp) || isNaN(deltaV)) throw new Error("Final Mass, Isp/Ve, and Ideal Δv are required.");
+                                m0_structural = mf_structural * Math.exp(deltaV / (isp * G0));
+                                break;
+                            case 'finalMass':
+                                if (isNaN(m0_structural) || isNaN(isp) || isNaN(deltaV)) throw new Error("Initial Mass, Isp/Ve, and Ideal Δv are required.");
+                                mf_structural = m0_structural / Math.exp(deltaV / (isp * G0));
+                                break;
+                            case 'propellantMass':
+                                if (isNaN(mf_structural) || isNaN(isp) || isNaN(deltaV)) throw new Error("Final Mass, Isp/Ve, and Ideal Δv are required.");
+                                mp_structural = mf_structural * (Math.exp(deltaV / (isp * G0)) - 1);
+                                m0_structural = mf_structural + mp_structural; // Derive initial mass
+                                break;
+                            case 'isp':
+                                if (isNaN(m0_structural) || isNaN(mf_structural) || isNaN(deltaV)) throw new Error("Initial Mass, Final Mass, and Ideal Δv are required.");
+                                if (m0_structural <= mf_structural) throw new Error("Initial Mass must be greater than Final Mass.");
+                                isp = deltaV / (G0 * Math.log(m0_structural / mf_structural));
+                                ve = isp * G0;
+                                break;
+                        }
+
+                        if (isNaN(m0_structural) || isNaN(mf_structural) || isNaN(isp) || isNaN(deltaV)) {
+                            throw new Error("Calculation resulted in an invalid number (NaN). Please check inputs.");
+                        }
+                        
+                        stagesData.push({ stageIndex, m0_structural, mf_structural, isp, ve, deltaV_ideal: deltaV, solvedFor: solveFor });
+
+                    } catch (error) {
+                        resultsContainer.innerHTML = `<p class="text-red-500 font-bold">Error in Stage ${stageIndex}: ${error.message}</p>`;
+                        return;
+                    }
+                }
+
+                let totalEffectiveDeltaV = 0;
+                let upperStagesMass = 0;
+                for (let i = stagesData.length - 1; i >= 0; i--) {
+                    const stage = stagesData[i];
+                    stage.m0_total = stage.m0_structural + upperStagesMass;
+                    stage.mf_total = stage.mf_structural + upperStagesMass;
+                    stage.propellantMass = stage.m0_structural - stage.mf_structural;
+                    stage.massRatio = stage.m0_total / stage.mf_total;
+                    stage.deltaV = stage.isp * G0 * Math.log(stage.massRatio);
+                    totalEffectiveDeltaV += stage.deltaV;
+                    upperStagesMass = stage.m0_total;
+                }
+
+                const tableRows = [
+                    { label: 'Initial Mass (Total)', key: 'm0_total', format: (val) => val.toLocaleString(undefined, {maximumFractionDigits: 0}) + ' kg' },
+                    { label: 'Final Mass (Total)', key: 'mf_total', format: (val) => val.toLocaleString(undefined, {maximumFractionDigits: 0}) + ' kg' },
+                    { label: 'Propellant Mass', key: 'propellantMass', format: (val) => val.toLocaleString(undefined, {maximumFractionDigits: 0}) + ' kg' },
+                    { label: 'Mass Ratio', key: 'massRatio', format: (val) => val.toFixed(3) },
+                    { label: 'Specific Impulse (Isp)', key: 'isp', format: (val) => val.toFixed(2) + ' s' },
+                    { label: 'Exhaust Velocity (Vₑ)', key: 've', format: (val) => val.toFixed(2) + ' m/s' },
+                    { label: 'Ideal Δv (No Payload)', key: 'deltaV_ideal', format: (val) => val.toFixed(2) + ' m/s' },
+                    { label: 'Effective Stage Δv', key: 'deltaV', format: (val) => val.toFixed(2) + ' m/s', isBold: true, isBlue: true },
+                ];
+
+                const solvedMapping = { 
+                    'initialMass': 'm0_total', 
+                    'finalMass': 'mf_total',
+                    'propellantMass': 'propellantMass',
+                    'isp': 'isp', 
+                    'deltaV': 'deltaV_ideal' 
+                };
+                
+                let tableHTML = `<table class="w-full text-base"><thead><tr class="border-b-2 border-gray-300">`;
+                tableHTML += `<th class="py-3 pr-4 text-left font-semibold">Parameter</th>`;
+                stagesData.forEach(stage => {
+                    tableHTML += `<th class="py-3 px-4 text-right font-semibold">Stage ${stage.stageIndex}</th>`;
+                });
+                tableHTML += `</tr></thead><tbody>`;
+
+                tableRows.forEach(row => {
+                    const labelClasses = row.isBold ? 'font-bold text-gray-700' : 'font-semibold text-gray-600';
+                    tableHTML += `<tr class="border-b border-gray-200"><td class="py-3 pr-4 ${labelClasses}">${row.label}</td>`;
+                    stagesData.forEach(stage => {
+                        const value = stage[row.key];
+                        const formattedValue = row.format(value);
+                        let valueClasses = row.isBlue ? 'font-bold text-blue-600' : '';
+                        if (solvedMapping[stage.solvedFor] === row.key) {
+                            valueClasses += ' bg-yellow-100 font-bold';
+                        }
+                        tableHTML += `<td class="py-3 px-4 text-right ${valueClasses}">${formattedValue}</td>`;
+                    });
+                    tableHTML += `</tr>`;
+                });
+
+                tableHTML += `</tbody></table>`;
+                resultsContainer.innerHTML = tableHTML;
+
+                resultsContainer.innerHTML += `
+                    <div class="mt-6 pt-4 border-t border-gray-300">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-xl font-bold">Total Effective Delta-V:</h3>
+                            <span class="text-2xl font-bold text-green-600">${totalEffectiveDeltaV.toFixed(2)} m/s</span>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

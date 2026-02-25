@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Aerodynamic Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .label {
+            @apply text-sm font-medium text-gray-400;
+        }
+        .value {
+            @apply text-lg font-semibold text-white;
+        }
+        .unit {
+            @apply text-sm text-gray-400 ml-2;
+        }
+        .card {
+            @apply bg-gray-800 p-6 rounded-xl shadow-lg;
+        }
+        .input-group {
+            @apply mb-6;
+        }
+        .result-grid {
+            @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4;
+        }
+        .result-item {
+            @apply bg-gray-700/50 p-4 rounded-lg;
+        }
+        /* Styles for the searchable dropdown */
+        #search-container {
+            position: relative;
+        }
+        #search-results {
+            position: absolute;
+            width: 100%;
+            background-color: #2d3748; /* gray-800 */
+            border: 1px solid #4a5568; /* gray-700 */
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+            z-index: 10;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .search-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+        }
+        .search-item:hover {
+            background-color: #4a5568; /* gray-700 */
+        }
+        .search-item.highlighted {
+            background-color: #2b6cb0; /* blue-700 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-4xl w-full mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white">Aerodynamic Calculator</h1>
+            <p class="text-gray-400 mt-2">Enter any NACA 4-digit airfoil or search for a 3D object.</p>
+        </header>
+
+        <main class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Input Controls Card -->
+            <div class="card">
+                <h2 class="text-2xl font-semibold mb-6 border-b border-gray-700 pb-4">Input Parameters</h2>
+
+                <div class="input-group">
+                    <label for="object-search" class="label block mb-2">Object Shape</label>
+                    <div id="search-container">
+                        <input type="text" id="object-search" placeholder="e.g., 'NACA 2412' or 'Sphere'" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                        <div id="search-results" class="hidden"></div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="wind-speed" class="label flex justify-between">
+                        <span>Wind Speed (v)</span>
+                        <span id="wind-speed-value" class="font-bold text-blue-400">50 m/s</span>
+                    </label>
+                    <input type="range" id="wind-speed" min="1" max="300" value="50" class="w-full mt-2">
+                </div>
+
+                <div id="dimensions-controls">
+                    <div class="input-group">
+                        <label for="chord" class="label flex justify-between">
+                            <span id="chord-label">Chord Length (c)</span>
+                            <span id="chord-value" class="font-bold text-blue-400">2.0 m</span>
+                        </label>
+                        <input type="range" id="chord" min="0.1" max="10" step="0.1" value="2" class="w-full mt-2">
+                    </div>
+                    <div class="input-group" id="span-control-group">
+                        <label for="span" class="label flex justify-between">
+                            <span id="span-label">Span (b)</span>
+                            <span id="span-value" class="font-bold text-blue-400">10.0 m</span>
+                        </label>
+                        <input type="range" id="span" min="0.1" max="20" step="0.1" value="10" class="w-full mt-2">
+                    </div>
+                </div>
+
+                <div class="input-group" id="aoa-control-group">
+                    <label for="angle-of-attack" class="label flex justify-between">
+                        <span>Angle of Attack (α)</span>
+                        <span id="angle-of-attack-value" class="font-bold text-blue-400">5 °</span>
+                    </label>
+                    <input type="range" id="angle-of-attack" min="-20" max="20" value="5" class="w-full mt-2">
+                </div>
+            </div>
+
+            <!-- Results Card -->
+            <div class="card">
+                <h2 class="text-2xl font-semibold mb-6 border-b border-gray-700 pb-4">Calculated Results</h2>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="label">Reynolds Number (Re)</div>
+                        <div id="reynolds-number" class="value">0.00</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="label">Dynamic Pressure (q)</div>
+                        <div><span id="dynamic-pressure" class="value">0.00</span><span class="unit">Pa</span></div>
+                    </div>
+                    <div class="result-item">
+                        <div class="label">Reference Area (A)</div>
+                        <div><span id="reference-area" class="value">0.00</span><span class="unit">m²</span></div>
+                    </div>
+                    <div class="result-item" id="cl-item">
+                        <div class="label">Lift Coefficient (Cl)</div>
+                        <div id="lift-coefficient" class="value">0.00</div>
+                    </div>
+                    <div class="result-item" id="cd-item">
+                        <div class="label">Drag Coefficient (Cd)</div>
+                        <div id="drag-coefficient" class="value">0.00</div>
+                    </div>
+                    <div class="result-item" id="ld-item">
+                        <div class="label">L/D Ratio</div>
+                        <div id="ld-ratio" class="value">0.00</div>
+                    </div>
+                    <div class="result-item col-span-1 sm:col-span-2 lg:col-span-3 bg-blue-900/50">
+                        <div class="label">Lift Force (F_L)</div>
+                        <div><span id="lift-force" class="value text-green-400">0.00</span><span class="unit">N</span></div>
+                    </div>
+                    <div class="result-item col-span-1 sm:col-span-2 lg:col-span-3 bg-blue-900/50">
+                        <div class="label">Drag Force (F_D)</div>
+                        <div><span id="drag-force" class="value text-red-400">0.00</span><span class="unit">N</span></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- Constants ---
+        const RHO = 1.225; // Air density (kg/m^3) at sea level
+        const MU = 1.81e-5; // Dynamic viscosity of air (Pa·s)
+
+        // --- Shape Database for non-airfoil objects ---
+        const SHAPES = {
+            'sphere': { name: 'Sphere', type: 'bluff', cd: 0.47 },
+            'hemisphere_front': { name: 'Hemisphere (Facing Flow)', type: 'bluff', cd: 0.38 },
+            'hemisphere_back': { name: 'Hemisphere (Facing Away)', type: 'bluff', cd: 1.42 },
+            'cylinder': { name: 'Cylinder', type: 'bluff', cd: 1.2 },
+            'cone': { name: 'Cone (60°)', type: 'bluff', cd: 0.5 },
+            'cube': { name: 'Cube', type: 'bluff', cd: 1.05 },
+            'flat_plate': { name: 'Flat Plate (Perpendicular)', type: 'bluff', cd: 1.28 },
+            'teardrop': { name: 'Teardrop Body (Streamlined)', type: 'bluff', cd: 0.04 },
+            'ellipsoid': { name: 'Ellipsoid (2:1)', type: 'bluff', cd: 0.1 },
+            'torus': { name: 'Torus', type: 'bluff', cd: 0.7 },
+            'bullet': { name: 'Bullet', type: 'bluff', cd: 0.295 },
+            'car': { name: 'Car (Modern Sedan)', type: 'bluff', cd: 0.28, cl: -0.05 },
+            'truck': { name: 'Truck (Tractor-Trailer)', type: 'bluff', cd: 0.96 },
+            'cyclist_upright': { name: 'Cyclist (Upright)', type: 'bluff', cd: 1.1 },
+            'cyclist_racing': { name: 'Cyclist (Racing)', type: 'bluff', cd: 0.88 },
+        };
+        let currentShapeKey = 'naca2412';
+
+        // --- UI Elements ---
+        const ui = {
+            objectSearch: document.getElementById('object-search'),
+            searchResults: document.getElementById('search-results'),
+            windSpeedSlider: document.getElementById('wind-speed'),
+            chordSlider: document.getElementById('chord'),
+            spanSlider: document.getElementById('span'),
+            aoaSlider: document.getElementById('angle-of-attack'),
+            
+            windSpeedValue: document.getElementById('wind-speed-value'),
+            chordValue: document.getElementById('chord-value'),
+            spanValue: document.getElementById('span-value'),
+            aoaValue: document.getElementById('angle-of-attack-value'),
+            
+            chordLabel: document.getElementById('chord-label'),
+            spanLabel: document.getElementById('span-label'),
+            spanControlGroup: document.getElementById('span-control-group'),
+            aoaControlGroup: document.getElementById('aoa-control-group'),
+
+            reynoldsNumber: document.getElementById('reynolds-number'),
+            dynamicPressure: document.getElementById('dynamic-pressure'),
+            referenceArea: document.getElementById('reference-area'),
+            liftCoefficient: document.getElementById('lift-coefficient'),
+            dragCoefficient: document.getElementById('drag-coefficient'),
+            ldRatio: document.getElementById('ld-ratio'),
+            liftForce: document.getElementById('lift-force'),
+            dragForce: document.getElementById('drag-force'),
+
+            clItem: document.getElementById('cl-item'),
+            cdItem: document.getElementById('cd-item'),
+            ldItem: document.getElementById('ld-item'),
+        };
+
+        // --- Procedural Airfoil Calculation ---
+        function parseNaca4Digit(nacaString) {
+            const code = nacaString.replace(/naca\s*/i, '');
+            if (code.length !== 4 || isNaN(parseInt(code))) return null;
+            
+            const m = parseInt(code[0]) / 100.0; // Max camber
+            const p = parseInt(code[1]) / 10.0;  // Camber position
+            const t = parseInt(code.substring(2)) / 100.0; // Thickness
+            
+            if (p === 0) { // Symmetric airfoil
+                return { name: `Airfoil (NACA ${code})`, type: 'airfoil', zeroLiftAlpha: 0, Cdo: 0.006 };
+            }
+            
+            // Estimate zero-lift angle of attack based on camber
+            const zeroLiftAlpha = -Math.atan2(m, (1 - p)); // in radians
+            return { name: `Airfoil (NACA ${code})`, type: 'airfoil', zeroLiftAlpha, Cdo: 0.008 };
+        }
+
+        // --- Main Calculation Logic ---
+        function calculateAerodynamics() {
+            const v = parseFloat(ui.windSpeedSlider.value);
+            const l = parseFloat(ui.chordSlider.value);
+            const b = parseFloat(ui.spanSlider.value);
+            const alpha = parseFloat(ui.aoaSlider.value);
+            const alphaRad = alpha * (Math.PI / 180);
+
+            let A, Cl = 0, Cd = 0;
+            let shapeData = SHAPES[currentShapeKey] || parseNaca4Digit(currentShapeKey);
+            if (!shapeData) return;
+
+            if (shapeData.type === 'airfoil') {
+                A = l * b;
+                const effectiveAlpha = alphaRad - shapeData.zeroLiftAlpha;
+                Cl = 2 * Math.PI * Math.sin(effectiveAlpha);
+                if (alpha > 15 || alpha < -10) Cl *= 0.5; // Stall model
+                const k = 0.05; // Induced drag factor
+                Cd = shapeData.Cdo + k * Math.pow(Cl, 2);
+            } else { // Bluff body
+                if (['sphere', 'cone', 'flat_plate', 'teardrop', 'hemisphere_front', 'hemisphere_back', 'ellipsoid', 'bullet'].includes(currentShapeKey)) {
+                    A = Math.PI * Math.pow(l / 2, 2);
+                } else {
+                    A = l * b;
+                }
+                Cd = shapeData.cd;
+                Cl = shapeData.cl || 0;
+            }
+
+            const q = 0.5 * RHO * Math.pow(v, 2);
+            const re = (RHO * v * l) / MU;
+            const lift = Cl * q * A;
+            const drag = Cd * q * A;
+            const ldRatio = Cd === 0 ? Infinity : Cl / Cd;
+
+            updateResultsUI(re, q, A, Cl, Cd, ldRatio, lift, drag);
+        }
+
+        // --- UI Update Logic ---
+        function updateResultsUI(re, q, A, Cl, Cd, ldRatio, lift, drag) {
+            ui.reynoldsNumber.textContent = re.toExponential(2);
+            ui.dynamicPressure.textContent = q.toFixed(0);
+            ui.referenceArea.textContent = A.toFixed(2);
+            ui.liftCoefficient.textContent = Cl.toFixed(3);
+            ui.dragCoefficient.textContent = Cd.toFixed(3);
+            ui.ldRatio.textContent = isFinite(ldRatio) ? ldRatio.toFixed(2) : 'N/A';
+            ui.liftForce.textContent = lift.toFixed(2);
+            ui.dragForce.textContent = drag.toFixed(2);
+        }
+        
+        function updateControlsUI() {
+            let shapeData = SHAPES[currentShapeKey] || parseNaca4Digit(currentShapeKey);
+            if (!shapeData) return;
+            const isAirfoil = shapeData.type === 'airfoil';
+            
+            ui.clItem.style.display = isAirfoil ? 'block' : 'none';
+            ui.ldItem.style.display = isAirfoil ? 'block' : 'none';
+            ui.aoaControlGroup.style.display = isAirfoil ? 'block' : 'none';
+
+            const hasSpan = !['sphere', 'cone', 'flat_plate', 'teardrop', 'hemisphere_front', 'hemisphere_back', 'ellipsoid', 'bullet'].includes(currentShapeKey);
+            ui.spanControlGroup.style.display = hasSpan ? 'block' : 'none';
+            
+            const labels = {
+                'airfoil': { chord: 'Chord (c)', span: 'Span (b)' },
+                'sphere': { chord: 'Diameter (d)' },
+                'cylinder': { chord: 'Diameter (d)', span: 'Length (l)' },
+                'cone': { chord: 'Base Diameter (d)' },
+                'cube': { chord: 'Side Length (s)', span: 'Length (l)' },
+                'flat_plate': { chord: 'Diameter (d)' },
+                'teardrop': { chord: 'Diameter (d)' },
+                'hemisphere_front': { chord: 'Diameter (d)' },
+                'hemisphere_back': { chord: 'Diameter (d)' },
+                'ellipsoid': { chord: 'Diameter (d)' },
+                'bullet': { chord: 'Diameter (d)' },
+                'torus': { chord: 'Major Diameter (D)', span: 'Tube Diameter (d)' },
+                'car': { chord: 'Width (w)', span: 'Height (h)' },
+                'truck': { chord: 'Width (w)', span: 'Height (h)' },
+                'cyclist_upright': { chord: 'Width (w)', span: 'Height (h)' },
+                'cyclist_racing': { chord: 'Width (w)', span: 'Height (h)' },
+            };
+            
+            const shapeLabelKey = isAirfoil ? 'airfoil' : currentShapeKey;
+            ui.chordLabel.textContent = (labels[shapeLabelKey] && labels[shapeLabelKey].chord) || 'Primary Dimension';
+            if (hasSpan) {
+                ui.spanLabel.textContent = (labels[shapeLabelKey] && labels[shapeLabelKey].span) || 'Secondary Dimension';
+            }
+        }
+
+        function updateSliderValues() {
+            ui.windSpeedValue.textContent = `${ui.windSpeedSlider.value} m/s`;
+            ui.chordValue.textContent = `${parseFloat(ui.chordSlider.value).toFixed(1)} m`;
+            ui.spanValue.textContent = `${parseFloat(ui.spanSlider.value).toFixed(1)} m`;
+            ui.aoaValue.textContent = `${ui.aoaSlider.value} °`;
+        }
+
+        // --- Search/Autocomplete Logic ---
+        function populateSearchResults(filter = '') {
+            ui.searchResults.innerHTML = '';
+            const filteredKeys = Object.keys(SHAPES).filter(key => 
+                SHAPES[key].name.toLowerCase().includes(filter.toLowerCase())
+            );
+
+            if (filteredKeys.length === 0 && !filter.toLowerCase().startsWith('naca')) {
+                ui.searchResults.classList.add('hidden');
+                return;
+            }
+
+            filteredKeys.forEach(key => {
+                const item = document.createElement('div');
+                item.className = 'search-item';
+                item.textContent = SHAPES[key].name;
+                item.dataset.key = key;
+                item.addEventListener('click', () => selectShape(key));
+                ui.searchResults.appendChild(item);
+            });
+            ui.searchResults.classList.remove('hidden');
+        }
+
+        function selectShape(key, name) {
+            currentShapeKey = key;
+            ui.objectSearch.value = name || SHAPES[key].name;
+            ui.searchResults.classList.add('hidden');
+            ui.objectSearch.classList.remove('border-red-500');
+            ui.objectSearch.classList.add('border-green-500');
+            updateControlsUI();
+            calculateAerodynamics();
+        }
+
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            const sliders = [ui.windSpeedSlider, ui.chordSlider, ui.spanSlider, ui.aoaSlider];
+            sliders.forEach(slider => {
+                slider.addEventListener('input', () => {
+                    updateSliderValues();
+                    calculateAerodynamics();
+                });
+            });
+
+            ui.objectSearch.addEventListener('input', () => {
+                const query = ui.objectSearch.value;
+                const nacaMatch = query.match(/^(naca\s*)(\d{4})$/i);
+                
+                if (nacaMatch) {
+                    const nacaCode = `naca${nacaMatch[2]}`;
+                    const parsed = parseNaca4Digit(nacaCode);
+                    if (parsed) {
+                        selectShape(nacaCode, `Airfoil (NACA ${nacaMatch[2]})`);
+                    }
+                } else {
+                    populateSearchResults(query);
+                    ui.objectSearch.classList.remove('border-green-500');
+                    ui.objectSearch.classList.add('border-red-500');
+                }
+            });
+
+            ui.objectSearch.addEventListener('focus', () => {
+                populateSearchResults(ui.objectSearch.value);
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!ui.searchResults.contains(e.target) && e.target !== ui.objectSearch) {
+                    ui.searchResults.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- Initial Run ---
+        window.onload = () => {
+            selectShape('naca2412', 'Airfoil (NACA 2412)'); // Set initial state
+            setupEventListeners();
+            updateSliderValues();
+            calculateAerodynamics();
+        };
+
+    </script>
+</body>
+</html>
